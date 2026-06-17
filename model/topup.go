@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -19,6 +20,7 @@ type TopUp struct {
 	TradeNo         string  `json:"trade_no" gorm:"unique;type:varchar(255);index"`
 	PaymentMethod   string  `json:"payment_method" gorm:"type:varchar(50)"`
 	PaymentProvider string  `json:"payment_provider" gorm:"type:varchar(50);default:''"`
+	ProviderMeta    string  `json:"provider_meta" gorm:"type:text"`
 	CreateTime      int64   `json:"create_time"`
 	CompleteTime    int64   `json:"complete_time"`
 	Status          string  `json:"status"`
@@ -29,6 +31,7 @@ const (
 	PaymentMethodCreem        = "creem"
 	PaymentMethodWaffo        = "waffo"
 	PaymentMethodWaffoPancake = "waffo_pancake"
+	PaymentMethodHuifu        = "huifu"
 	PaymentMethodBalance      = "balance"
 )
 
@@ -38,8 +41,18 @@ const (
 	PaymentProviderCreem        = "creem"
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
+	PaymentProviderHuifu        = "huifu"
 	PaymentProviderBalance      = "balance"
 )
+
+type HuifuTopUpMeta struct {
+	ReqDate    string `json:"req_date"`
+	ReqSeqID   string `json:"req_seq_id"`
+	PreOrderID string `json:"pre_order_id"`
+	JumpURL    string `json:"jump_url"`
+	HfSeqID    string `json:"hf_seq_id"`
+	TransStat  string `json:"trans_stat"`
+}
 
 var (
 	ErrPaymentMethodMismatch = errors.New("payment method mismatch")
@@ -57,6 +70,26 @@ func (topUp *TopUp) Update() error {
 	var err error
 	err = DB.Save(topUp).Error
 	return err
+}
+
+func (topUp *TopUp) SetProviderMeta(meta HuifuTopUpMeta) error {
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	topUp.ProviderMeta = string(data)
+	return topUp.Update()
+}
+
+func (topUp *TopUp) GetHuifuMeta() (HuifuTopUpMeta, error) {
+	if topUp == nil || topUp.ProviderMeta == "" {
+		return HuifuTopUpMeta{}, nil
+	}
+	var meta HuifuTopUpMeta
+	if err := json.Unmarshal([]byte(topUp.ProviderMeta), &meta); err != nil {
+		return HuifuTopUpMeta{}, err
+	}
+	return meta, nil
 }
 
 func GetTopUpById(id int) *TopUp {
@@ -583,6 +616,67 @@ func RechargeWaffoPancake(tradeNo string) (err error) {
 
 	if quotaToAdd > 0 {
 		RecordLog(topUp.UserId, LogTypeTopup, fmt.Sprintf("Waffo Pancake充值成功，充值额度: %v，支付金额: %.2f", logger.FormatQuota(quotaToAdd), topUp.Money))
+	}
+
+	return nil
+}
+
+func RechargeHuifu(tradeNo string, callerIp string) (err error) {
+	if tradeNo == "" {
+		return errors.New("未提供支付单号")
+	}
+
+	var quotaToAdd int
+	topUp := &TopUp{}
+
+	refCol := "`trade_no`"
+	if common.UsingPostgreSQL {
+		refCol = `"trade_no"`
+	}
+
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		err := tx.Set("gorm:query_option", "FOR UPDATE").Where(refCol+" = ?", tradeNo).First(topUp).Error
+		if err != nil {
+			return errors.New("充值订单不存在")
+		}
+
+		if topUp.PaymentProvider != PaymentProviderHuifu {
+			return ErrPaymentMethodMismatch
+		}
+
+		if topUp.Status == common.TopUpStatusSuccess {
+			return nil
+		}
+
+		if topUp.Status != common.TopUpStatusPending {
+			return errors.New("充值订单状态错误")
+		}
+
+		quotaToAdd = int(decimal.NewFromInt(topUp.Amount).Mul(decimal.NewFromFloat(common.QuotaPerUnit)).IntPart())
+		if quotaToAdd <= 0 {
+			return errors.New("无效的充值额度")
+		}
+
+		topUp.CompleteTime = common.GetTimestamp()
+		topUp.Status = common.TopUpStatusSuccess
+		if err := tx.Save(topUp).Error; err != nil {
+			return err
+		}
+
+		if err := tx.Model(&User{}).Where("id = ?", topUp.UserId).Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		common.SysError("huifu topup failed: " + err.Error())
+		return errors.New("充值失败，请稍后重试")
+	}
+
+	if quotaToAdd > 0 {
+		RecordTopupLog(topUp.UserId, fmt.Sprintf("汇付充值成功，充值额度: %v，支付金额: %.2f", logger.FormatQuota(quotaToAdd), topUp.Money), callerIp, topUp.PaymentMethod, PaymentMethodHuifu)
 	}
 
 	return nil

@@ -21,6 +21,7 @@ import React from 'react';
 import { Modal, Typography, Card, Skeleton } from '@douyinfe/semi-ui';
 import { SiAlipay, SiWechat, SiStripe } from 'react-icons/si';
 import { CreditCard } from 'lucide-react';
+import PaymentMethodIcon from '../PaymentMethodIcon';
 
 const { Text } = Typography;
 
@@ -140,24 +141,11 @@ const PaymentConfirmModal = ({
                             size={16}
                             color='#635BFF'
                           />
-                        ) : payMethod.icon ? (
-                          <img
-                            src={payMethod.icon}
-                            alt={payMethod.name}
-                            className='mr-2'
-                            style={{
-                              width: 16,
-                              height: 16,
-                              objectFit: 'contain',
-                            }}
-                          />
                         ) : (
-                          <CreditCard
+                          <PaymentMethodIcon
+                            payMethod={payMethod}
                             className='mr-2'
                             size={16}
-                            color={
-                              payMethod.color || 'var(--semi-color-text-2)'
-                            }
                           />
                         )}
                         <Text className='text-slate-900 dark:text-slate-100'>

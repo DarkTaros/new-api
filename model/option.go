@@ -114,6 +114,14 @@ func InitOptionMap() {
 	common.OptionMap["WaffoPancakeMinTopUp"] = strconv.Itoa(setting.WaffoPancakeMinTopUp)
 	common.OptionMap["WaffoPancakeStoreID"] = setting.WaffoPancakeStoreID
 	common.OptionMap["WaffoPancakeProductID"] = setting.WaffoPancakeProductID
+	common.OptionMap["HuifuSysID"] = setting.HuifuSysID
+	common.OptionMap["HuifuProductID"] = setting.HuifuProductID
+	common.OptionMap["HuifuMerchantID"] = setting.HuifuMerchantID
+	common.OptionMap["HuifuProjectID"] = setting.HuifuProjectID
+	common.OptionMap["HuifuSkillSource"] = setting.HuifuSkillSource
+	common.OptionMap["HuifuRSAPrivateKey"] = setting.HuifuRSAPrivateKey
+	common.OptionMap["HuifuRSAPublicKey"] = setting.HuifuRSAPublicKey
+	common.OptionMap["HuifuNotifyURL"] = setting.HuifuNotifyURL
 	common.OptionMap["TopupGroupRatio"] = common.TopupGroupRatio2JSONString()
 	common.OptionMap["Chats"] = setting.Chats2JsonString()
 	common.OptionMap["AutoGroups"] = setting.AutoGroups2JsonString()
@@ -462,6 +470,22 @@ func updateOptionMap(key string, value string) (err error) {
 		setting.WaffoPancakeUnitPrice, _ = strconv.ParseFloat(value, 64)
 	case "WaffoPancakeMinTopUp":
 		setting.WaffoPancakeMinTopUp, _ = strconv.Atoi(value)
+	case "HuifuSysID":
+		setting.HuifuSysID = value
+	case "HuifuProductID":
+		setting.HuifuProductID = value
+	case "HuifuMerchantID":
+		setting.HuifuMerchantID = value
+	case "HuifuProjectID":
+		setting.HuifuProjectID = value
+	case "HuifuSkillSource":
+		setting.HuifuSkillSource = value
+	case "HuifuRSAPrivateKey":
+		setting.HuifuRSAPrivateKey = value
+	case "HuifuRSAPublicKey":
+		setting.HuifuRSAPublicKey = value
+	case "HuifuNotifyURL":
+		setting.HuifuNotifyURL = value
 	case "TopupGroupRatio":
 		err = common.UpdateTopupGroupRatioByJSONString(value)
 	case "GitHubClientId":

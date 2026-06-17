@@ -27,9 +27,6 @@ import { PAYMENT_TYPES, PAYMENT_ICON_COLORS } from '../constants'
 // UI Helper Functions
 // ============================================================================
 
-const HAS_LOCATION =
-  typeof globalThis !== 'undefined' && 'location' in globalThis
-
 /**
  * Resolves a backend-provided image URL to http(s) only. Rejects javascript:,
  * data:, blob:, file:, and URLs with userinfo, which are unsafe in <img src/>.
@@ -38,11 +35,12 @@ function normalizeHttpIconUrl(raw: string | undefined | null): string | null {
   if (!raw) return null
   const s = raw.trim()
   if (!s) return null
+  if (!/^https?:\/\//i.test(s)) {
+    return null
+  }
   let url: URL
   try {
-    url = HAS_LOCATION
-      ? new URL(s, (globalThis as { location: Location }).location.href)
-      : new URL(s)
+    url = new URL(s)
   } catch {
     return null
   }
@@ -131,6 +129,13 @@ export function getPaymentIcon(
         <CreditCard
           className={className}
           style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.WAFFO] }}
+        />
+      )
+    case PAYMENT_TYPES.HUIFU:
+      return (
+        <Landmark
+          className={className}
+          style={{ color: PAYMENT_ICON_COLORS[PAYMENT_TYPES.HUIFU] }}
         />
       )
     case PAYMENT_TYPES.WAFFO_PANCAKE:

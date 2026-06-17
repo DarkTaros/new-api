@@ -264,6 +264,14 @@ export type BillingSettings = {
   // section (saved via /api/option/waffo-pancake/save).
   WaffoPancakeStoreID: string
   WaffoPancakeProductID: string
+  HuifuSysID: string
+  HuifuProductID: string
+  HuifuMerchantID: string
+  HuifuProjectID: string
+  HuifuSkillSource: string
+  HuifuRSAPrivateKey: string
+  HuifuRSAPublicKey: string
+  HuifuNotifyURL: string
   'checkin_setting.enabled': boolean
   'checkin_setting.min_quota': number
   'checkin_setting.max_quota': number

@@ -59,6 +59,9 @@ export type WaffoPancakePaymentResponse = ApiResponse<
     }
   | string
 >
+export type HuifuPaymentResponse = ApiResponse<
+  { jump_url?: string; trade_no?: string; req_seq_id?: string } | string
+>
 
 /**
  * Creem product configuration
@@ -150,6 +153,10 @@ export interface TopupInfo {
   enable_waffo_pancake_topup?: boolean
   /** Minimum topup amount for Waffo Pancake */
   waffo_pancake_min_topup?: number
+  /** Whether Huifu topup is enabled */
+  enable_huifu_topup?: boolean
+  /** Minimum topup amount for Huifu */
+  huifu_min_topup?: number
   /** Whether redemption code usage is enabled */
   enable_redemption?: boolean
   /** Whether compliance confirmation has been completed */
@@ -200,6 +207,11 @@ export interface WaffoPaymentRequest {
  * Waffo Pancake payment request parameters
  */
 export interface WaffoPancakePaymentRequest {
+  /** Topup amount */
+  amount: number
+}
+
+export interface HuifuPaymentRequest {
   /** Topup amount */
   amount: number
 }

@@ -23,6 +23,7 @@ import SettingsGeneralPayment from '../../pages/Setting/Payment/SettingsGeneralP
 import SettingsPaymentGateway from '../../pages/Setting/Payment/SettingsPaymentGateway';
 import SettingsPaymentGatewayStripe from '../../pages/Setting/Payment/SettingsPaymentGatewayStripe';
 import SettingsPaymentGatewayCreem from '../../pages/Setting/Payment/SettingsPaymentGatewayCreem';
+import SettingsPaymentGatewayHuifu from '../../pages/Setting/Payment/SettingsPaymentGatewayHuifu';
 import SettingsPaymentGatewayWaffo from '../../pages/Setting/Payment/SettingsPaymentGatewayWaffo';
 import { API, showError, showSuccess, toBoolean } from '../../helpers';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +52,14 @@ const PaymentSetting = () => {
     StripeUnitPrice: 8.0,
     StripeMinTopUp: 1,
     StripePromotionCodesEnabled: false,
+    HuifuSysID: '',
+    HuifuProductID: '',
+    HuifuMerchantID: '',
+    HuifuProjectID: '',
+    HuifuSkillSource: '',
+    HuifuRSAPrivateKey: '',
+    HuifuRSAPublicKey: '',
+    HuifuNotifyURL: '',
 
     'payment_setting.compliance_confirmed': false,
     'payment_setting.compliance_terms_version': '',
@@ -291,6 +300,13 @@ const PaymentSetting = () => {
               </Tabs.TabPane>
               <Tabs.TabPane tab={t('Creem 设置')} itemKey='creem'>
                 <SettingsPaymentGatewayCreem
+                  options={inputs}
+                  refresh={onRefresh}
+                  hideSectionTitle
+                />
+              </Tabs.TabPane>
+              <Tabs.TabPane tab={t('Huifu 设置')} itemKey='huifu'>
+                <SettingsPaymentGatewayHuifu
                   options={inputs}
                   refresh={onRefresh}
                   hideSectionTitle

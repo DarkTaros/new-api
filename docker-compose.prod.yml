@@ -1,0 +1,81 @@
+services:
+  new-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: new-api:huifu-prod
+    container_name: new-api
+    restart: unless-stopped
+    command: --log-dir /app/logs
+    ports:
+      - "${NEW_API_PORT:-3000}:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      SQL_DSN: "postgresql://root:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/new-api?sslmode=disable"
+      REDIS_CONN_STRING: "redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD}@redis:6379"
+      SESSION_SECRET: "${SESSION_SECRET:?set SESSION_SECRET}"
+      TZ: "${TZ:-Asia/Shanghai}"
+      ERROR_LOG_ENABLED: "${ERROR_LOG_ENABLED:-true}"
+      BATCH_UPDATE_ENABLED: "${BATCH_UPDATE_ENABLED:-true}"
+      NODE_NAME: "${NODE_NAME:-new-api-prod-1}"
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - new-api-network
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7
+    container_name: new-api-redis
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--requirepass",
+        "${REDIS_PASSWORD:?set REDIS_PASSWORD}",
+      ]
+    volumes:
+      - redis_data:/data
+    networks:
+      - new-api-network
+
+  postgres:
+    image: postgres:15
+    container_name: new-api-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"
+      POSTGRES_DB: new-api
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - new-api-network
+
+volumes:
+  pg_data:
+  redis_data:
+
+networks:
+  new-api-network:
+    driver: bridge
+
+# jilei@192 new-api % export POSTGRES_PASSWORD='lYsRkxC0oLJNRCwCVM0Hi4qTBSpW9sKeVumELVUxBp89ewe+UU96ony8nOM='
+# export REDIS_PASSWORD='GZ43PhVOxbwqw7EGZ6wkly8tuIkQ+9rlbDopWdKpCjPN+bB88aVfGZnp+fk='
+# export SESSION_SECRET='OAF65UFohpgRCTta1nobiwm58AaPI5DoBbgJ/pVTGf4M5giOGch4XGMzmB4='
+# export NEW_API_PORT=3000
+# jilei@192 new-api % docker compose -f docker-compose.prod.yml up -d --build

@@ -174,6 +174,16 @@ const BILLING_SECTIONS = [
           WaffoPancakePrivateKey: settings.WaffoPancakePrivateKey ?? '',
           WaffoPancakeReturnURL: settings.WaffoPancakeReturnURL ?? '',
         }}
+        huifuDefaultValues={{
+          HuifuSysID: settings.HuifuSysID ?? '',
+          HuifuProductID: settings.HuifuProductID ?? '',
+          HuifuMerchantID: settings.HuifuMerchantID ?? '',
+          HuifuProjectID: settings.HuifuProjectID ?? '',
+          HuifuSkillSource: settings.HuifuSkillSource ?? '',
+          HuifuRSAPrivateKey: settings.HuifuRSAPrivateKey ?? '',
+          HuifuRSAPublicKey: settings.HuifuRSAPublicKey ?? '',
+          HuifuNotifyURL: settings.HuifuNotifyURL ?? '',
+        }}
         waffoPancakeProvisionedStoreID={settings.WaffoPancakeStoreID ?? ''}
         waffoPancakeProvisionedProductID={settings.WaffoPancakeProductID ?? ''}
         complianceDefaults={{

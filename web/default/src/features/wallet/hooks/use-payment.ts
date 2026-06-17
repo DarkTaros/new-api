@@ -21,6 +21,7 @@ import i18next from 'i18next'
 import { toast } from 'sonner'
 import {
   calculateAmount,
+  calculateHuifuAmount,
   calculateStripeAmount,
   calculateWaffoPancakeAmount,
   requestPayment,
@@ -29,6 +30,7 @@ import {
 } from '../api'
 import {
   isStripePayment,
+  isHuifuPayment,
   isWaffoPancakePayment,
   submitPaymentForm,
 } from '../lib'
@@ -50,10 +52,13 @@ export function usePayment() {
 
         const isStripe = isStripePayment(paymentType)
         const isPancake = isWaffoPancakePayment(paymentType)
+        const isHuifu = isHuifuPayment(paymentType)
         const response = isStripe
           ? await calculateStripeAmount({ amount: topupAmount })
           : isPancake
             ? await calculateWaffoPancakeAmount({ amount: topupAmount })
+            : isHuifu
+              ? await calculateHuifuAmount({ amount: topupAmount })
             : await calculateAmount({ amount: topupAmount })
 
         if (isApiSuccess(response) && response.data) {

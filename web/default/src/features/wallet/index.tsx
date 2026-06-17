@@ -37,12 +37,14 @@ import {
   useAffiliate,
   useRedemption,
   useCreemPayment,
+  useHuifuPayment,
   useWaffoPayment,
   useWaffoPancakePayment,
 } from './hooks'
 import {
   getDefaultPaymentType,
   getMinTopupAmount,
+  isHuifuPayment,
   isWaffoPancakePayment,
 } from './lib'
 import type {
@@ -100,6 +102,8 @@ export function Wallet(props: WalletProps) {
   const { redeeming, redeemCode } = useRedemption()
   const { processing: creemProcessing, processCreemPayment } = useCreemPayment()
   const { processWaffoPayment } = useWaffoPayment()
+  const { processing: huifuProcessing, processHuifuPayment } =
+    useHuifuPayment()
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
     useWaffoPancakePayment()
 
@@ -186,9 +190,12 @@ export function Wallet(props: WalletProps) {
     if (!selectedPaymentMethod) return
 
     const isPancake = isWaffoPancakePayment(selectedPaymentMethod.type)
+    const isHuifu = isHuifuPayment(selectedPaymentMethod.type)
     const success = isPancake
       ? await processWaffoPancakePayment(topupAmount)
-      : await processPayment(topupAmount, selectedPaymentMethod.type)
+      : isHuifu
+        ? await processHuifuPayment(topupAmount)
+        : await processPayment(topupAmount, selectedPaymentMethod.type)
 
     if (success) {
       setConfirmDialogOpen(false)
@@ -303,6 +310,7 @@ export function Wallet(props: WalletProps) {
                   enableWaffoPancakeTopup={
                     topupInfo?.enable_waffo_pancake_topup
                   }
+                  enableHuifuTopup={topupInfo?.enable_huifu_topup}
                 />
               </div>
 
@@ -335,7 +343,7 @@ export function Wallet(props: WalletProps) {
         paymentAmount={paymentAmount}
         paymentMethod={selectedPaymentMethod}
         calculating={calculating}
-        processing={processing || pancakeProcessing}
+        processing={processing || pancakeProcessing || huifuProcessing}
         discountRate={getDiscountRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
       />

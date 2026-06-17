@@ -54,6 +54,7 @@ func GetTopUpInfo(c *gin.Context) {
 
 	// Waffo Pancake displayed above the legacy Waffo gateway.
 	enableWaffoPancake := isWaffoPancakeTopUpEnabled()
+	enableHuifu := isHuifuTopUpEnabled()
 	if enableWaffoPancake {
 		hasWaffoPancake := false
 		for _, method := range payMethods {
@@ -69,6 +70,24 @@ func GetTopUpInfo(c *gin.Context) {
 				"type":      model.PaymentMethodWaffoPancake,
 				"color":     "rgba(var(--semi-orange-5), 1)",
 				"min_topup": strconv.Itoa(setting.WaffoPancakeMinTopUp),
+			})
+		}
+	}
+
+	if enableHuifu {
+		hasHuifu := false
+		for _, method := range payMethods {
+			if method["type"] == model.PaymentMethodHuifu {
+				hasHuifu = true
+				break
+			}
+		}
+		if !hasHuifu {
+			payMethods = append(payMethods, map[string]string{
+				"name":      "Huifu Gateway",
+				"type":      model.PaymentMethodHuifu,
+				"color":     "rgba(var(--semi-green-5), 1)",
+				"min_topup": strconv.Itoa(setting.HuifuMinTopUp),
 			})
 		}
 	}
@@ -101,6 +120,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"enable_creem_topup":               isCreemTopUpEnabled(),
 		"enable_waffo_topup":               enableWaffo,
 		"enable_waffo_pancake_topup":       enableWaffoPancake,
+		"enable_huifu_topup":               enableHuifu,
 		"enable_redemption":                complianceConfirmed,
 		"payment_compliance_confirmed":     complianceConfirmed,
 		"payment_compliance_terms_version": operation_setting.CurrentComplianceTermsVersion,
@@ -116,6 +136,7 @@ func GetTopUpInfo(c *gin.Context) {
 		"stripe_min_topup":        setting.StripeMinTopUp,
 		"waffo_min_topup":         setting.WaffoMinTopUp,
 		"waffo_pancake_min_topup": setting.WaffoPancakeMinTopUp,
+		"huifu_min_topup":         setting.HuifuMinTopUp,
 		"amount_options":          operation_setting.GetPaymentSetting().AmountOptions,
 		"discount":                operation_setting.GetPaymentSetting().AmountDiscount,
 		"topup_link":              common.TopUpLink,

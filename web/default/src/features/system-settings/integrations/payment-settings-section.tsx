@@ -66,6 +66,7 @@ import {
   normalizeJsonForComparison,
   removeTrailingSlash,
 } from './utils'
+import { saveHuifuConfig } from './huifu-api'
 import { saveWaffoPancakeConfig } from './waffo-pancake-api'
 import {
   WaffoPancakeSettingsSection,
@@ -174,13 +175,42 @@ const paymentSchema = z.object({
   WaffoPancakeMerchantID: z.string(),
   WaffoPancakePrivateKey: z.string(),
   WaffoPancakeReturnURL: z.string(),
+  HuifuSysID: z.string(),
+  HuifuProductID: z.string(),
+  HuifuMerchantID: z.string(),
+  HuifuProjectID: z.string(),
+  HuifuSkillSource: z.string(),
+  HuifuRSAPrivateKey: z.string(),
+  HuifuRSAPublicKey: z.string(),
+  HuifuNotifyURL: z.string().refine((value) => {
+    const trimmed = value.trim()
+    if (!trimmed) return true
+    try {
+      const parsed = new URL(trimmed)
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    } catch {
+      return false
+    }
+  }, 'Provide a valid notify URL starting with http:// or https://'),
 })
 
 type PaymentFormValues = z.infer<typeof paymentSchema>
 type WaffoFormFieldValues = Omit<WaffoSettingsValues, 'WaffoPayMethods'>
+type HuifuSettingsValues = {
+  HuifuSysID: string
+  HuifuProductID: string
+  HuifuMerchantID: string
+  HuifuProjectID: string
+  HuifuSkillSource: string
+  HuifuRSAPrivateKey: string
+  HuifuRSAPublicKey: string
+  HuifuNotifyURL: string
+}
 type PaymentBaseFormValues = Omit<
   PaymentFormValues,
-  keyof WaffoFormFieldValues | keyof WaffoPancakeSettingsValues
+  | keyof WaffoFormFieldValues
+  | keyof WaffoPancakeSettingsValues
+  | keyof HuifuSettingsValues
 >
 
 const CURRENT_COMPLIANCE_TERMS_VERSION = 'v1'
@@ -197,6 +227,7 @@ type PaymentSettingsSectionProps = {
   defaultValues: PaymentBaseFormValues
   waffoDefaultValues: WaffoSettingsValues
   waffoPancakeDefaultValues: WaffoPancakeSettingsValues
+  huifuDefaultValues: HuifuSettingsValues
   waffoPancakeProvisionedStoreID?: string
   waffoPancakeProvisionedProductID?: string
   complianceDefaults: PaymentComplianceDefaults
@@ -215,6 +246,7 @@ export function PaymentSettingsSection({
   defaultValues,
   waffoDefaultValues,
   waffoPancakeDefaultValues,
+  huifuDefaultValues,
   waffoPancakeProvisionedStoreID,
   waffoPancakeProvisionedProductID,
   complianceDefaults,
@@ -227,8 +259,9 @@ export function PaymentSettingsSection({
       ...defaultValues,
       ...waffoDefaultValues,
       ...waffoPancakeDefaultValues,
+      ...huifuDefaultValues,
     }),
-    [defaultValues, waffoDefaultValues, waffoPancakeDefaultValues]
+    [defaultValues, waffoDefaultValues, waffoPancakeDefaultValues, huifuDefaultValues]
   )
   const initialRef = React.useRef(initialFormValues)
   const defaultsSignature = React.useMemo(
@@ -455,6 +488,14 @@ export function PaymentSettingsSection({
       WaffoPancakeReturnURL: removeTrailingSlash(
         values.WaffoPancakeReturnURL.trim()
       ),
+      HuifuSysID: values.HuifuSysID.trim(),
+      HuifuProductID: values.HuifuProductID.trim(),
+      HuifuMerchantID: values.HuifuMerchantID.trim(),
+      HuifuProjectID: values.HuifuProjectID.trim(),
+      HuifuSkillSource: values.HuifuSkillSource.trim(),
+      HuifuRSAPrivateKey: values.HuifuRSAPrivateKey.trim(),
+      HuifuRSAPublicKey: values.HuifuRSAPublicKey.trim(),
+      HuifuNotifyURL: values.HuifuNotifyURL.trim(),
     }
 
     const initial = {
@@ -502,6 +543,14 @@ export function PaymentSettingsSection({
       WaffoPancakeReturnURL: removeTrailingSlash(
         initialRef.current.WaffoPancakeReturnURL.trim()
       ),
+      HuifuSysID: initialRef.current.HuifuSysID.trim(),
+      HuifuProductID: initialRef.current.HuifuProductID.trim(),
+      HuifuMerchantID: initialRef.current.HuifuMerchantID.trim(),
+      HuifuProjectID: initialRef.current.HuifuProjectID.trim(),
+      HuifuSkillSource: initialRef.current.HuifuSkillSource.trim(),
+      HuifuRSAPrivateKey: initialRef.current.HuifuRSAPrivateKey.trim(),
+      HuifuRSAPublicKey: initialRef.current.HuifuRSAPublicKey.trim(),
+      HuifuNotifyURL: initialRef.current.HuifuNotifyURL.trim(),
     }
 
     const updates: Array<{ key: string; value: string | number | boolean }> = []
@@ -706,7 +755,17 @@ export function PaymentSettingsSection({
       waffoPancakeSelection.storeID !== waffoPancakeSavedBinding.storeID ||
       waffoPancakeSelection.productID !== waffoPancakeSavedBinding.productID
 
-    if (updates.length === 0 && !hasWaffoPancakeChanges) {
+    const hasHuifuChanges =
+      sanitized.HuifuSysID !== initial.HuifuSysID ||
+      sanitized.HuifuProductID !== initial.HuifuProductID ||
+      sanitized.HuifuMerchantID !== initial.HuifuMerchantID ||
+      sanitized.HuifuProjectID !== initial.HuifuProjectID ||
+      sanitized.HuifuSkillSource !== initial.HuifuSkillSource ||
+      sanitized.HuifuNotifyURL !== initial.HuifuNotifyURL ||
+      sanitized.HuifuRSAPrivateKey.length > 0 ||
+      sanitized.HuifuRSAPublicKey.length > 0
+
+    if (updates.length === 0 && !hasWaffoPancakeChanges && !hasHuifuChanges) {
       toast.info(t('No changes to save'))
       return
     }
@@ -715,58 +774,91 @@ export function PaymentSettingsSection({
       await updateOption.mutateAsync(update)
     }
 
-    if (!hasWaffoPancakeChanges) {
-      return
-    }
-
-    if (!sanitized.WaffoPancakeMerchantID) {
-      toast.error(t('Merchant ID is required'))
-      return
-    }
-
-    if (!waffoPancakeSelection.storeID || !waffoPancakeSelection.productID) {
-      toast.error(t('Pick or create both a store and a product before saving.'))
-      return
-    }
-
-    try {
-      const body = await saveWaffoPancakeConfig({
-        merchantID: sanitized.WaffoPancakeMerchantID,
-        privateKey: sanitized.WaffoPancakePrivateKey,
-        returnURL: sanitized.WaffoPancakeReturnURL,
-        storeID: waffoPancakeSelection.storeID,
-        productID: waffoPancakeSelection.productID,
-      })
-
-      if (
-        body?.message === 'success' &&
-        typeof body.data === 'object' &&
-        body.data
-      ) {
-        const saved = body.data as { product_id: string; store_id: string }
-        const savedBinding = {
-          storeID: saved.store_id,
-          productID: saved.product_id,
-        }
-        setWaffoPancakeSavedBinding(savedBinding)
-        setWaffoPancakeSelection(savedBinding)
-        queryClient.invalidateQueries({ queryKey: ['system-options'] })
-        toast.success(t('Waffo Pancake settings saved'))
+    if (hasWaffoPancakeChanges) {
+      if (!sanitized.WaffoPancakeMerchantID) {
+        toast.error(t('Merchant ID is required'))
         return
       }
 
-      const reason = typeof body?.data === 'string' ? body.data : undefined
-      toast.error(
-        reason
-          ? `${t('Waffo Pancake save failed')}: ${reason}`
-          : t('Waffo Pancake save failed')
-      )
-    } catch (error) {
-      toast.error(
-        `${t('Waffo Pancake save failed')}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      )
+      if (!waffoPancakeSelection.storeID || !waffoPancakeSelection.productID) {
+        toast.error(
+          t('Pick or create both a store and a product before saving.')
+        )
+        return
+      }
+
+      try {
+        const body = await saveWaffoPancakeConfig({
+          merchantID: sanitized.WaffoPancakeMerchantID,
+          privateKey: sanitized.WaffoPancakePrivateKey,
+          returnURL: sanitized.WaffoPancakeReturnURL,
+          storeID: waffoPancakeSelection.storeID,
+          productID: waffoPancakeSelection.productID,
+        })
+
+        if (
+          body?.message === 'success' &&
+          typeof body.data === 'object' &&
+          body.data
+        ) {
+          const saved = body.data as { product_id: string; store_id: string }
+          const savedBinding = {
+            storeID: saved.store_id,
+            productID: saved.product_id,
+          }
+          setWaffoPancakeSavedBinding(savedBinding)
+          setWaffoPancakeSelection(savedBinding)
+          queryClient.invalidateQueries({ queryKey: ['system-options'] })
+          toast.success(t('Waffo Pancake settings saved'))
+        } else {
+          const reason =
+            typeof body?.data === 'string' ? body.data : undefined
+          toast.error(
+            reason
+              ? `${t('Waffo Pancake save failed')}: ${reason}`
+              : t('Waffo Pancake save failed')
+          )
+        }
+      } catch (error) {
+        toast.error(
+          `${t('Waffo Pancake save failed')}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
+    }
+
+    if (hasHuifuChanges) {
+      try {
+        const body = await saveHuifuConfig({
+          sysID: sanitized.HuifuSysID,
+          productID: sanitized.HuifuProductID,
+          merchantID: sanitized.HuifuMerchantID,
+          projectID: sanitized.HuifuProjectID,
+          skillSource: sanitized.HuifuSkillSource,
+          rsaPrivateKey: sanitized.HuifuRSAPrivateKey,
+          rsaPublicKey: sanitized.HuifuRSAPublicKey,
+          notifyURL: sanitized.HuifuNotifyURL,
+        })
+
+        if (body?.success === true || body?.message === 'success') {
+          queryClient.invalidateQueries({ queryKey: ['system-options'] })
+          toast.success(t('Huifu settings saved'))
+        } else {
+          const reason = typeof body?.data === 'string' ? body.data : undefined
+          toast.error(
+            reason
+              ? `${t('Huifu save failed')}: ${reason}`
+              : t('Huifu save failed')
+          )
+        }
+      } catch (error) {
+        toast.error(
+          `${t('Huifu save failed')}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
     }
   }
 
@@ -880,6 +972,7 @@ export function PaymentSettingsSection({
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
+                <TabsTrigger value='huifu'>Huifu</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
                 <TabsTrigger value='waffo'>Waffo</TabsTrigger>
               </TabsList>
@@ -994,11 +1087,11 @@ export function PaymentSettingsSection({
                           />
                         )}
                       </FormControl>
-                      <FormDescription>
-                        {t(
-                          'Configured as PayMethods JSON. The type value decides which payment flow is used: stripe for Stripe, waffo_pancake for Waffo Pancake, and other values are sent to Epay as the type parameter.'
-                        )}
-                      </FormDescription>
+                        <FormDescription>
+                          {t(
+                            'Configured as PayMethods JSON. The type value decides which payment flow is used: stripe for Stripe, huifu for Huifu, waffo_pancake for Waffo Pancake, and other values are sent to Epay as the type parameter.'
+                          )}
+                        </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -1578,6 +1671,166 @@ export function PaymentSettingsSection({
                       </FormControl>
                       <FormDescription>
                         {t('Configure Creem products. Provide a JSON array.')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </TabsContent>
+
+            <TabsContent value='huifu' className={paymentTabContentClassName}>
+              <div className='space-y-4'>
+                <div>
+                  <h3 className='text-lg font-medium'>{t('Huifu Gateway')}</h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'Configure hosted H5/PC wallet top-up. callback_url only returns the user to the frontend; final success still depends on async notify and server-side query confirmation.'
+                    )}
+                  </p>
+                </div>
+
+                <Alert>
+                  <AlertTitle>{t('Integration notes')}</AlertTitle>
+                  <AlertDescription>
+                    {t(
+                      'Use the real Huifu control-panel project_id. notify_url must be publicly reachable. callback_url is only the frontend return page; final payment success is determined by async notifications and query confirmation.'
+                    )}
+                  </AlertDescription>
+                </Alert>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='HuifuSysID'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>HuifuSysID</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>{t('Outer request sys_id')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='HuifuProductID'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>HuifuProductID</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>{t('Outer request product_id')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='HuifuMerchantID'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>HuifuMerchantID</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>{t('Business data.huifu_id')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='HuifuProjectID'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>HuifuProjectID</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>{t('hosting_data.project_id')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='HuifuSkillSource'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>HuifuSkillSource</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>{t('Optional source marker')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name='HuifuNotifyURL'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>HuifuNotifyURL</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormDescription>{t('Publicly reachable notify_url')}</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name='HuifuRSAPrivateKey'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>HuifuRSAPrivateKey</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={6}
+                          placeholder={t(
+                            'Leave blank to keep the saved private key unchanged'
+                          )}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Merchant RSA private key, treated as sensitive')}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name='HuifuRSAPublicKey'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>HuifuRSAPublicKey</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          {...field}
+                          rows={6}
+                          placeholder={t(
+                            'Leave blank to keep the saved public key unchanged'
+                          )}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('Huifu RSA public key, treated as sensitive')}
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
