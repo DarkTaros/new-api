@@ -82,10 +82,6 @@ export const getRedemptionsColumns = ({
   copyText,
   setEditingRedemption,
   setShowEdit,
-  refresh,
-  redemptions,
-  activePage,
-  showDeleteRedemptionModal,
 }) => {
   return [
     {
@@ -150,8 +146,8 @@ export const getRedemptionsColumns = ({
             node: 'item',
             name: t('删除'),
             type: 'danger',
-            onClick: () => {
-              showDeleteRedemptionModal(record);
+            onClick: async () => {
+              await manageRedemption(record.id, REDEMPTION_ACTIONS.DELETE, record);
             },
           },
         ];

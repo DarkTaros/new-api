@@ -124,7 +124,7 @@ export function DataTableRowActions<TData>({
           )}
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onClick={() => {
+            onClick={async () => {
               setCurrentRow(redemption)
               setOpen('delete')
             }}

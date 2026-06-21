@@ -146,12 +146,14 @@ export const useRedemptionsData = () => {
       const { success, message } = res.data;
       if (success) {
         showSuccess(t('操作成功完成！'));
-        let redemption = res.data.data;
-        let newRedemptions = [...redemptions];
-        if (action !== REDEMPTION_ACTIONS.DELETE) {
+        if (action === REDEMPTION_ACTIONS.DELETE) {
+          removeRecord(record?.key);
+        } else {
+          let redemption = res.data.data;
           record.status = redemption.status;
+          setRedemptions([...redemptions]);
         }
-        setRedemptions(newRedemptions);
+        return true;
       } else {
         showError(message);
       }
@@ -159,6 +161,7 @@ export const useRedemptionsData = () => {
       showError(error.message);
     }
     setLoading(false);
+    return false;
   };
 
   // Refresh data
@@ -250,6 +253,35 @@ export const useRedemptionsData = () => {
       keys += selectedKeys[i].name + '    ' + selectedKeys[i].key + '\n';
     }
     await copyText(keys);
+  };
+
+  // Batch delete selected redemption codes
+  const batchDeleteSelectedRedemptions = async () => {
+    if (selectedKeys.length === 0) {
+      showError(t('请至少选择一个兑换码！'));
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const ids = selectedKeys.map((item) => item.id);
+      const res = await API.post('/api/redemption/batch', { ids });
+      const { success, message, data } = res.data;
+      if (success) {
+        showSuccess(
+          t('已成功删除 {{count}} 个兑换码', {
+            count: data ?? ids.length,
+          }),
+        );
+        setSelectedKeys([]);
+        await refresh();
+      } else {
+        showError(message);
+      }
+    } catch (error) {
+      showError(error.message);
+    }
+    setLoading(false);
   };
 
   // Batch delete redemption codes (clear invalid)
@@ -352,6 +384,7 @@ export const useRedemptionsData = () => {
 
     // Batch operations
     batchCopyRedemptions,
+    batchDeleteSelectedRedemptions,
     batchDeleteRedemptions,
 
     // Translation function

@@ -69,6 +69,10 @@ export interface SearchRedemptionsParams {
   page_size?: number
 }
 
+export interface IdBatchRequest {
+  ids: number[]
+}
+
 export interface RedemptionFormData {
   id?: number
   name: string

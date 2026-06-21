@@ -32,6 +32,7 @@ import { CopyButton } from '@/components/copy-button'
 import { DataTableBulkActions as BulkActionsToolbar } from '@/components/data-table'
 import { deleteInvalidRedemptions } from '../api'
 import { type Redemption } from '../types'
+import { RedemptionsMultiDeleteDialog } from './redemptions-multi-delete-dialog'
 import { useRedemptions } from './redemptions-provider'
 
 type DataTableBulkActionsProps<TData> = {
@@ -43,6 +44,8 @@ export function DataTableBulkActions<TData>({
 }: DataTableBulkActionsProps<TData>) {
   const { t } = useTranslation()
   const { triggerRefresh } = useRedemptions()
+  const [showDeleteSelectedConfirm, setShowDeleteSelectedConfirm] =
+    useState(false)
   const [showDeleteInvalidConfirm, setShowDeleteInvalidConfirm] =
     useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -96,6 +99,27 @@ export function DataTableBulkActions<TData>({
               <Button
                 variant='destructive'
                 size='icon'
+                onClick={() => setShowDeleteSelectedConfirm(true)}
+                className='size-8'
+                aria-label={t('Delete selected redemption codes')}
+                title={t('Delete selected redemption codes')}
+              />
+            }
+          >
+            <Trash2 />
+            <span className='sr-only'>{t('Delete selected redemption codes')}</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>{t('Delete selected redemption codes')}</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant='destructive'
+                size='icon'
                 onClick={() => setShowDeleteInvalidConfirm(true)}
                 className='size-8'
                 aria-label={t('Delete invalid redemption codes')}
@@ -131,6 +155,12 @@ export function DataTableBulkActions<TData>({
           </>
         }
         confirmText={t('Delete Invalid')}
+      />
+
+      <RedemptionsMultiDeleteDialog
+        open={showDeleteSelectedConfirm}
+        onOpenChange={setShowDeleteSelectedConfirm}
+        table={table}
       />
     </>
   )

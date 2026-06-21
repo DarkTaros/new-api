@@ -123,6 +123,7 @@ export const STATIC_I18N_KEYS = [
   'Failed to create redemption code',
   'Failed to update redemption code',
   'Failed to delete redemption code',
+  'Failed to delete redemption codes',
   'Failed to delete invalid redemption codes',
   'Failed to update redemption code status',
   'Name must be between {{min}} and {{max}} characters',
@@ -130,6 +131,10 @@ export const STATIC_I18N_KEYS = [
   'Expired time cannot be earlier than current time',
   'Quota must be a positive number',
   'Successfully created {{count}} redemption codes',
+  'Successfully deleted {{count}} redemption code(s)',
+  'Delete selected redemption codes',
+  'Delete {{count}} redemption code(s)?',
+  'You are about to delete {{count}} redemption code(s).',
 
   // Home page (constants-driven labels)
   'Cost Tracking',

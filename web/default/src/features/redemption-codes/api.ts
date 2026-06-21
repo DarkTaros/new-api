@@ -24,6 +24,7 @@ import type {
   GetRedemptionsResponse,
   SearchRedemptionsParams,
   RedemptionFormData,
+  IdBatchRequest,
 } from './types'
 
 // ============================================================================
@@ -86,6 +87,14 @@ export async function updateRedemptionStatus(
 // Delete a single redemption code
 export async function deleteRedemption(id: number): Promise<ApiResponse> {
   const res = await api.delete(`/api/redemption/${id}/`)
+  return res.data
+}
+
+// Delete multiple redemption codes
+export async function batchDeleteRedemptions(
+  data: IdBatchRequest
+): Promise<ApiResponse<number>> {
+  const res = await api.post('/api/redemption/batch', data)
   return res.data
 }
 

@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -64,6 +66,7 @@ var auditRouteActions = map[string]string{
 	// 兑换码
 	"PUT /api/redemption/":           "redemption.update",
 	"DELETE /api/redemption/:id":     "redemption.delete",
+	"POST /api/redemption/batch":     "redemption.delete_batch",
 	"DELETE /api/redemption/invalid": "redemption.delete_invalid",
 
 	// 预填组
@@ -77,130 +80,187 @@ var auditRouteActions = map[string]string{
 	"DELETE /api/vendors/:id": "vendor.delete",
 
 	// 模型元数据
-	"POST /api/models/":              "model.create",
-	"PUT /api/models/":               "model.update",
-	"DELETE /api/models/:id":         "model.delete",
-	"POST /api/models/sync_upstream": "model.sync_upstream",
-
-	// 部署
-	"POST /api/deployments/":      "deployment.create",
-	"PUT /api/deployments/:id":    "deployment.update",
-	"DELETE /api/deployments/:id": "deployment.delete",
-
-	// 订阅（管理员）
-	"POST /api/subscription/admin/plans":    "subscription.plan_create",
-	"PUT /api/subscription/admin/plans/:id": "subscription.plan_update",
-	"POST /api/subscription/admin/bind":     "subscription.bind",
-
-	// 日志
-	"DELETE /api/log/": "log.clear",
+	"POST /api/models/":      "model.create",
+	"PUT /api/models/":       "model.update",
+	"DELETE /api/models/:id": "model.delete",
 }
 
-// beginAdminAudit 在管理/root 写操作进入 handler 前包装 ResponseWriter，
-// 以便事后解析响应判断业务是否成功。仅对写方法（POST/PUT/PATCH/DELETE）生效；
-// 只读请求返回 nil，调用方据此跳过事后兜底记录。
-//
-// 该函数由 authHelper 在鉴权通过、c.Next() 之前调用：因为任何管理/root 接口都
-// 必然经过 AdminAuth/RootAuth，将审计兜底内聚到鉴权链路即可保证「新增接口自动留痕」，
-// 无需在路由上再单独挂一层审计中间件（避免漏挂）。
+// AuditLogger 记录后台管理类变更操作的审计日志。
+// 约定：
+// - 仅在已登录且携带用户 ID 时记录；匿名请求忽略。
+// - 优先使用路由模板（FullPath）而非原始 URL，便于聚合。
+// - 对业务失败不记录，避免噪音；成功判定优先看响应体中的 success 字段，其次 HTTP 2xx。
+func AuditLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		method := c.Request.Method
+		if method != "POST" && method != "PUT" && method != "PATCH" && method != "DELETE" {
+			c.Next()
+			return
+		}
+
+		uid, exists := c.Get(string(constant.ContextKeyUserId))
+		if !exists {
+			c.Next()
+			return
+		}
+		userID, ok := uid.(int)
+		if !ok || userID <= 0 {
+			c.Next()
+			return
+		}
+
+		auditWriter := beginAdminAudit(c)
+		c.Next()
+		finishAdminAudit(c, auditWriter)
+
+		status := c.Writer.Status()
+		if status < 200 || status >= 300 {
+			return
+		}
+
+		path := c.FullPath()
+		if path == "" {
+			path = c.Request.URL.Path
+		}
+		action := auditRouteActions[method+" "+path]
+		if action == "" {
+			return
+		}
+
+		detail := map[string]interface{}{
+			"method": method,
+			"route":  path,
+		}
+
+		content := auditContentEN(action, detail)
+		operatorInfo := auditOperatorInfo(c)
+		gopool.Go(func() {
+			model.RecordOperationAuditLog(userID, content, c.ClientIP(), action, detail, operatorInfo, nil)
+		})
+	}
+}
+
 func beginAdminAudit(c *gin.Context) *auditResponseWriter {
-	method := c.Request.Method
-	if method != "POST" && method != "PUT" && method != "PATCH" && method != "DELETE" {
+	if c == nil {
 		return nil
 	}
-	writer := &auditResponseWriter{
-		ResponseWriter: c.Writer,
-		body:           bytes.NewBuffer(nil),
-		maxSize:        64 * 1024,
+	if _, exists := c.Get(string(constant.ContextKeyAuditLogged)); exists {
+		return nil
 	}
-	c.Writer = writer
-	return writer
+	aw := &auditResponseWriter{
+		ResponseWriter: c.Writer,
+		body:           &bytes.Buffer{},
+		maxSize:        32 * 1024,
+	}
+	c.Writer = aw
+	return aw
 }
 
-// finishAdminAudit 在 c.Next() 之后对管理/高危写操作做兜底审计记录。
-// 若 handler 内已手动埋点（设置 ContextKeyAuditLogged），则跳过，避免重复。
-func finishAdminAudit(c *gin.Context, writer *auditResponseWriter) {
-	if writer == nil {
+func finishAdminAudit(c *gin.Context, aw *auditResponseWriter) {
+	if c == nil || aw == nil {
 		return
 	}
-	method := c.Request.Method
-
-	// handler 已手动记录更精细的审计日志，跳过兜底。
 	if common.GetContextKeyBool(c, constant.ContextKeyAuditLogged) {
 		return
 	}
-
-	operatorId := c.GetInt("id")
-	operatorName := c.GetString("username")
-	operatorRole := c.GetInt("role")
-	ip := c.ClientIP()
-	status := writer.Status()
-	success := auditResponseSuccess(status, writer.body.Bytes())
-
-	route := c.FullPath()
-	action := auditRouteActions[method+" "+route]
+	status := c.Writer.Status()
+	if status < 200 || status >= 300 {
+		return
+	}
+	if !isAPISuccessPayload(aw.body.Bytes()) {
+		return
+	}
+	path := c.FullPath()
+	if path == "" {
+		path = c.Request.URL.Path
+	}
+	action := auditRouteActions[c.Request.Method+" "+path]
 	if action == "" {
 		action = "generic"
 	}
-
-	routeParams := map[string]string{}
-	for _, p := range c.Params {
-		routeParams[p.Key] = p.Value
+	detail := map[string]interface{}{
+		"method": c.Request.Method,
+		"route":  path,
 	}
-
-	// op.params 为语言无关参数，供前端 i18n 渲染；generic 时携带 method/route。
-	opParams := map[string]interface{}{}
-	if action == "generic" {
-		opParams["method"] = method
-		opParams["route"] = route
-	}
-
-	// content 为英文兜底文本（导出/经典前端用）。
-	content := method + " " + route
-
-	adminInfo := map[string]interface{}{
-		"admin_id":       operatorId,
-		"admin_username": operatorName,
-		"admin_role":     operatorRole,
-		"auth_method":    auditAuthMethod(c),
-	}
-	auditInfo := map[string]interface{}{
-		"method":  method,
-		"route":   route,
-		"path":    c.Request.URL.Path,
-		"status":  status,
-		"success": success,
-	}
-	if len(routeParams) > 0 {
-		auditInfo["params"] = routeParams
-	}
-
+	content := auditContentEN(action, detail)
+	operatorInfo := auditOperatorInfo(c)
 	gopool.Go(func() {
-		model.RecordOperationAuditLog(operatorId, content, ip, action, opParams, adminInfo, auditInfo)
+		model.RecordOperationAuditLog(c.GetInt("id"), content, c.ClientIP(), action, detail, operatorInfo, nil)
 	})
 }
 
+func isAPISuccessPayload(payload []byte) bool {
+	if len(bytes.TrimSpace(payload)) == 0 {
+		return true
+	}
+	var data struct {
+		Success *bool `json:"success"`
+	}
+	if err := common.Unmarshal(payload, &data); err != nil {
+		return true
+	}
+	if data.Success == nil {
+		return true
+	}
+	return *data.Success
+}
+
+func auditContentEN(action string, params map[string]interface{}) string {
+	templates := map[string]string{
+		"user.topup_complete":                "Completed user top-up",
+		"user.reset_passkey":                 "Reset the user passkey",
+		"user.oauth_unbind":                  "Unbound user OAuth provider",
+		"option.payment_compliance":          "Updated payment compliance settings",
+		"option.reset_ratio":                 "Reset model ratio settings",
+		"option.clear_affinity_cache":        "Cleared channel affinity cache",
+		"custom_oauth.create":                "Created custom OAuth provider",
+		"custom_oauth.update":                "Updated custom OAuth provider",
+		"custom_oauth.delete":                "Deleted custom OAuth provider",
+		"performance.clear_disk_cache":       "Cleared disk cache",
+		"performance.gc":                     "Triggered garbage collection",
+		"performance.clear_logs":             "Cleared logs",
+		"redemption.update":                  "Updated redemption code",
+		"redemption.delete":                  "Deleted redemption code",
+		"redemption.delete_batch":            "Batch deleted redemption codes",
+		"redemption.delete_invalid":          "Deleted invalid redemption codes",
+		"prefill_group.create":               "Created prefill group",
+		"prefill_group.update":               "Updated prefill group",
+		"prefill_group.delete":               "Deleted prefill group",
+		"vendor.create":                      "Created vendor",
+		"vendor.update":                      "Updated vendor",
+		"vendor.delete":                      "Deleted vendor",
+		"model.create":                       "Created model metadata",
+		"model.update":                       "Updated model metadata",
+		"model.delete":                       "Deleted model metadata",
+		"generic":                            "Performed administrative write operation",
+	}
+	tmpl, ok := templates[action]
+	if !ok {
+		return action
+	}
+	return os.Expand(tmpl, func(key string) string {
+		if v, ok := params[key]; ok {
+			return fmt.Sprintf("%v", v)
+		}
+		return ""
+	})
+}
+
+func auditOperatorInfo(c *gin.Context) map[string]interface{} {
+	if c == nil {
+		return nil
+	}
+	return map[string]interface{}{
+		"admin_id":       c.GetInt("id"),
+		"admin_username": c.GetString("username"),
+		"admin_role":     c.GetInt("role"),
+		"auth_method":    auditAuthMethod(c),
+	}
+}
+
 func auditAuthMethod(c *gin.Context) string {
-	if c.GetBool("use_access_token") {
+	if c != nil && c.GetBool("use_access_token") {
 		return "access_token"
 	}
 	return "session"
-}
-
-// auditResponseSuccess 依据 HTTP 状态码与响应体推断操作是否成功。
-// 优先解析响应 JSON 中的 success 字段；无法解析时退回到状态码判断。
-func auditResponseSuccess(status int, body []byte) bool {
-	if status >= 400 {
-		return false
-	}
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) > 0 && trimmed[0] == '{' {
-		var resp struct {
-			Success *bool `json:"success"`
-		}
-		if err := common.Unmarshal(trimmed, &resp); err == nil && resp.Success != nil {
-			return *resp.Success
-		}
-	}
-	return status < 400
 }

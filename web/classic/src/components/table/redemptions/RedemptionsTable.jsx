@@ -17,15 +17,14 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Empty } from '@douyinfe/semi-ui';
 import CardTable from '../../common/ui/CardTable';
 import {
   IllustrationNoResult,
   IllustrationNoResultDark,
 } from '@douyinfe/semi-illustrations';
-import { getRedemptionsColumns, isExpired } from './RedemptionsColumnDefs';
-import DeleteRedemptionModal from './modals/DeleteRedemptionModal';
+import { getRedemptionsColumns } from './RedemptionsColumnDefs';
 
 const RedemptionsTable = (redemptionsData) => {
   const {
@@ -42,19 +41,8 @@ const RedemptionsTable = (redemptionsData) => {
     copyText,
     setEditingRedemption,
     setShowEdit,
-    refresh,
     t,
   } = redemptionsData;
-
-  // Modal states
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletingRecord, setDeletingRecord] = useState(null);
-
-  // Handle show delete modal
-  const showDeleteRedemptionModal = (record) => {
-    setDeletingRecord(record);
-    setShowDeleteModal(true);
-  };
 
   // Get all columns
   const columns = useMemo(() => {
@@ -64,10 +52,6 @@ const RedemptionsTable = (redemptionsData) => {
       copyText,
       setEditingRedemption,
       setShowEdit,
-      refresh,
-      redemptions,
-      activePage,
-      showDeleteRedemptionModal,
     });
   }, [
     t,
@@ -75,10 +59,6 @@ const RedemptionsTable = (redemptionsData) => {
     copyText,
     setEditingRedemption,
     setShowEdit,
-    refresh,
-    redemptions,
-    activePage,
-    showDeleteRedemptionModal,
   ]);
 
   // Handle compact mode by removing fixed positioning
@@ -125,17 +105,6 @@ const RedemptionsTable = (redemptionsData) => {
         }
         className='rounded-xl overflow-hidden'
         size='middle'
-      />
-
-      <DeleteRedemptionModal
-        visible={showDeleteModal}
-        onCancel={() => setShowDeleteModal(false)}
-        record={deletingRecord}
-        manageRedemption={manageRedemption}
-        refresh={refresh}
-        redemptions={redemptions}
-        activePage={activePage}
-        t={t}
       />
     </>
   );

@@ -74,8 +74,8 @@ networks:
   new-api-network:
     driver: bridge
 
-# jilei@192 new-api % export POSTGRES_PASSWORD='lYsRkxC0oLJNRCwCVM0Hi4qTBSpW9sKeVumELVUxBp89ewe+UU96ony8nOM='
-# export REDIS_PASSWORD='GZ43PhVOxbwqw7EGZ6wkly8tuIkQ+9rlbDopWdKpCjPN+bB88aVfGZnp+fk='
-# export SESSION_SECRET='OAF65UFohpgRCTta1nobiwm58AaPI5DoBbgJ/pVTGf4M5giOGch4XGMzmB4='
+# export POSTGRES_PASSWORD=lYsRkxC0oLJNRCwCVM0Hi4qTBSpW9sKeVumELVUxBp89ewe+UU96ony8nOM=
+# export REDIS_PASSWORD=GZ43PhVOxbwqw7EGZ6wkly8tuIkQ+9rlbDopWdKpCjPN+bB88aVfGZnp+fk=
+# export SESSION_SECRET=OAF65UFohpgRCTta1nobiwm58AaPI5DoBbgJ/pVTGf4M5giOGch4XGMzmB4=
 # export NEW_API_PORT=3000
-# jilei@192 new-api % docker compose -f docker-compose.prod.yml up -d --build
+# docker compose -f docker-compose.prod.yml up -d --build
